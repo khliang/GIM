@@ -3,7 +3,7 @@
 PARA_FILE::PARA_FILE()
 {
     no_subjects =0;
-    no_cases = 0;
+    //no_cases = 0;
     no_file = 0;
     penalty_per_snp=0.0;
 };
@@ -46,11 +46,11 @@ void PARA_FILE::Load(char *para_filename)
         printf("Number of Subjects = %d\n",no_subjects);
         Abort ("Number of Subjects must be equal or larger than 1");
     }
-    if (no_subjects < no_cases) 
+    /*if (no_subjects < no_cases) 
     {
         printf("Number of case = %d\n",no_cases);
         Abort ("Number of subjects must be equal or larger than the number of case");
-    }
+    }*/
 
     if (Np < 1) 
     {
@@ -172,7 +172,8 @@ void LAYER_FILE_DATA::LoadMatrix(int no_subjects, int flag_cox)
 		
 		if (flag_cox == 1) 
 		{ 
-        	fscanf(fp, "%f", &survival_time);		    
+        	fscanf(fp, "%f", &survival_time);	
+			if (survival_time<0) Abort("In the data file, the event time cannot be negative values");
         	Case_Control.time[case_control_index]= (double) survival_time;  
         };
 		        

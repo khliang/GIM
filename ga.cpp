@@ -1,5 +1,6 @@
 #include"gea.h"
 #include <math.h>
+#include <algorithm>
 
 SAMPLE_FILE::SAMPLE_FILE()
 {
@@ -109,19 +110,14 @@ ModelUnit * LAYER_DATA::Random_Rules()
 // It create a new model while the original model retained. The original model is deteted in memory by a higher level function
 ModelUnit * LAYER_DATA::Rules_Condensing (ModelUnit *original)
 {
-	//double probability;
 	ModelUnit *current;// current end	
 	ModelUnit *current2;
 	ModelUnit *original_next;
 	ModelUnit *head = NULL;
 	ModelUnit *element;//new element
-	//int file_index;
-	//int loc;
-	//char oper;
 	bool IsHead;
-	//int choice;
-    
-	IsHead = true;
+
+   	IsHead = true;
 	head = NULL;
     current = NULL;
     
@@ -242,7 +238,7 @@ ModelUnit * LAYER_DATA::Mutate(ModelUnit *original, double mutation_rate)
                   };
                   IsHead = false; 
                  break;
-              case 3://Change parameter and coefficient but not sign
+              case 3://Change variable and coefficient but not sign
 			     file_index = original->file_index;
 			     loc = rand() % individual_file[file_index].no_snps;
 			     element = Obtain_Coef();
@@ -262,12 +258,15 @@ ModelUnit * LAYER_DATA::Mutate(ModelUnit *original, double mutation_rate)
                  original = original->link; 
                  IsHead = false;
 	             break;              
-              case 4:// coefficient change by percentage
-              case 5:// coefficient change by percentage
+              case 4://
+              case 5:// coefficient multiply a random value if it is not higher than SquareOfDouble, for preventing overflow
 			     file_index = original->file_index;
 			     loc = original->snploc;
-			     element = Obtain_Coef();			     
-			     element->al1.value = (element->al1.value) * (original->al1.value);
+			     element = Obtain_Coef();
+				 if (abs(original->al1.value) < SquareOfDouble)		     
+			     	element->al1.value = (original->al1.value) * (element->al1.value);
+			     else element->al1.value = (original->al1.value) + (element->al1.value); //minor modification
+			     	
 			     element->file_index=file_index;
 				 element->snploc = loc;
                  element->oper = original->oper;
@@ -493,12 +492,7 @@ void LAYER_DATA::Fitness_ANOVA()
  	   	MST = (double) SST/(no_class-1);
                
        population[index].accuracy = (double) MST/MSE; 
-       population[index].fitness = population[index].accuracy * (1- population[index].length * penalty_per_snp);
-       //population[index].tp = MST;
-       //population[index].tn = MSE;
-       //population[index].fp = SST;
-       //population[index].fn = SSE;
-       
+       population[index].fitness = population[index].accuracy * (1- population[index].length * penalty_per_snp);  
 
    } //for the entire cohort
 }
@@ -531,6 +525,8 @@ void LAYER_DATA::Calculate_Number_Case_Controls()
 	
 	if (run_anova == 0)
 		printf ("Number of Cases = %d\nNumber of Controls = %d\n", no_case, no_control);
+    if (no_case <= 0 || no_control <= 0)
+    	Abort ("Data contained only one class. Cannot perform Mann-Whitney test or Cox regression.");
 };
 
 void LAYER_DATA::ClassLabel_Counts()
@@ -539,6 +535,7 @@ void LAYER_DATA::ClassLabel_Counts()
     int subject_id;
     ClassLabel *current_ptr; 
     bool empty_link = true;
+    int class_count = 0;
 	
 
        subject_id = 0;
@@ -565,11 +562,14 @@ void LAYER_DATA::ClassLabel_Counts()
        	{
        		printf ("Class Label %d\tNumber = %d\n", current_ptr->class_symbol, current_ptr->class_count);
        		current_ptr = current_ptr->next_label;
+       		class_count++;
 		}
+		if (class_count<=1)
+			Abort ("Class label less than 2. Cannot perform ANOVA analysis.");
 
 };
 
-void LAYER_DATA::Fitness_U_statistics()
+void LAYER_DATA::Fitness_U_statistics(bool two_way)
 
 {
     int i = 0;
@@ -583,6 +583,8 @@ void LAYER_DATA::Fitness_U_statistics()
     case_score = new double [no_subjects];
     control_score = new double [no_subjects];
     
+    //printf("Starting receiver-operating characteristics Analysis\n");      
+
     //index indicate models
     for(index = 0; index < Np; index++){
 
@@ -613,7 +615,7 @@ void LAYER_DATA::Fitness_U_statistics()
                else if (case_score[i] == control_score[j]) U_statistics += 0.5;
                }
        population[index].accuracy = (double) U_statistics/(no_case*(no_subjects-no_case)); 
-       if (population[index].accuracy < 0.5)
+       if (two_way && population[index].accuracy < 0.5)
             population[index].fitness = 1- population[index].accuracy;
        else population[index].fitness = population[index].accuracy;
        
@@ -635,13 +637,16 @@ void LAYER_DATA::Fitness_Cox_likelihood()
     double *control_time;
     double HR_post_Event;
     double Likelihood_per_Event;
-    double Cox_likelihood;
-    
+    //double Cox_likelihood;
+    double Log_Cox_likelihood;
+    double Log_Cox_likelihood_temp;
+	     
     case_score = new double [no_subjects];
     control_score = new double [no_subjects];
     case_time = new double [no_subjects];
     control_time = new double [no_subjects];
     
+    //printf("Starting Cox regression Analysis\n");  
     //index indicate models
     for(index = 0; index < Np; index++){
 
@@ -654,20 +659,21 @@ void LAYER_DATA::Fitness_Cox_likelihood()
 	   		// Survival Events defined as "case" and class label = 1
        		if (individual_file[0].Case_Control.label[subject_id]==0)
        		{
-       	  		control_score[j] = exp(Scoring(subject_id, index));
+       	  		control_score[j] = std::min(exp(Scoring(subject_id, index)),UpperBound);
        	  		control_time[j] = individual_file[0].Case_Control.time[subject_id];
        	  		j++;
 	   		} else if (individual_file[0].Case_Control.label[subject_id]==1)
        		{
-          		case_score[i] = exp(Scoring(subject_id, index)); 
+          		case_score[i] = std::min(exp(Scoring(subject_id, index)),UpperBound); 
           		case_time[i] = individual_file[0].Case_Control.time[subject_id];
           		i++;
           	};
 
        };  
           
-       Cox_likelihood = 1;
-       
+       Log_Cox_likelihood = 0;      
+       Log_Cox_likelihood_temp = 0;    
+	   	       
        for(i=0; i<no_case; i++)
        {
 			HR_post_Event = 0;
@@ -676,15 +682,21 @@ void LAYER_DATA::Fitness_Cox_likelihood()
                
 			for (j=0; j<no_case; j++)
                if (case_time[j] >= case_time[i]) HR_post_Event += case_score[j];      
-			           
-            Likelihood_per_Event = case_score[i]/HR_post_Event;
-            Cox_likelihood *= Likelihood_per_Event;
+			
+			if (HR_post_Event == 0) 
+			{
+				Likelihood_per_Event = PositiveZero; // neutralize this event
+				//Abort("Divide by 0");      
+			} else 
+				Likelihood_per_Event = std::max(case_score[i]/HR_post_Event,PositiveZero); 
+			
+            Log_Cox_likelihood_temp = std::max(log(Likelihood_per_Event),LowerBound);
+            Log_Cox_likelihood = std::max(Log_Cox_likelihood+Log_Cox_likelihood_temp,LowerBound);
         }
-
-
-    	population[index].accuracy = (double) 2 * log (Cox_likelihood); 
-        population[index].fitness = population[index].accuracy - population[index].length * penalty_per_snp;
-       //population[index].fitness -= (double) population[index].length * penalty_per_snp;
+        
+		population[index].accuracy = (double) 2 * Log_Cox_likelihood; 
+		
+        population[index].fitness = population[index].accuracy - population[index].length * COXPenaltyFactor * penalty_per_snp;
 
    } //for all models
 }
@@ -695,10 +707,7 @@ void BubbleSort(Model array[], int Np)
     ModelUnit *t;
     double a;
     double b;
-    //int a_tp;
-    //int a_tn;
-    //int a_fp;
-    //int a_fn;
+
     int e;
     
 	for(int i = 0;i < Np - 1;i++){
@@ -713,22 +722,6 @@ void BubbleSort(Model array[], int Np)
             a = array[j].fitness;
             array[j].fitness = array[j + 1].fitness;
             array[j + 1].fitness = a;
-            
-            //a_tp = array[j].tp;
-            //array[j].tp = array[j + 1].tp;
-            //array[j + 1].tp = a_tp;
-            
-            //a_tn = array[j].tn;
-            //array[j].tn = array[j + 1].tn;
-            //array[j + 1].tn = a_tn;
-            
-            //a_fp = array[j].fp;
-            //array[j].fp = array[j + 1].fp;
-            //array[j + 1].fp = a_fp;
-            
-            //a_fn = array[j].fn;
-            //array[j].fn = array[j + 1].fn;
-            //array[j + 1].fn = a_fn;
             
             b = array[j].accuracy;
             array[j].accuracy = array[j + 1].accuracy;

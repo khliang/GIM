@@ -11,17 +11,16 @@
 #define Maxmodel 10 //determine the maximum number of a randomly generated model, can be interpreted as the initial condition, may need to be enlarged for tracing
 #define Preserved_Model 1
 #define Top_Ratio 0.4
-#define ITER_NO 500 //30 number of iterations before reaching an output
-#define No_PERMU 1000000 //(1 million)
+#define ITER_NO 500 //Show an intermediate result after this number of iterations, also determine the MW procedure before the Cox regression 
+#define PositiveZero 0.000000000000001
+#define UpperBound 2000000000.0
+#define LowerBound -2000000000.0
+#define SquareOfDouble 10000000
 #define Max_File 25
 #define Max_Number_Header_Parameters 100 // limitations of the header 
 #define FILENAME_LENGTH 1024
-#define LogisticRange 20000
-#define SHOW_SENSITIVITY 0
-
-#define Trace_Stable_Iter 2000 //(for tracing)
 #define GABA_Stable_Iter 100000 //(for full gaba: 10000 iter for 60 subjects stable about 30 minutes, but for 5000 subjects it takes much much longer)
-
+#define COXPenaltyFactor 100
 
 //a base pair
 struct AlleleUnit{
@@ -62,10 +61,6 @@ struct LabelList{
 struct Model{
    double fitness;//deducted with penalty
    double accuracy;//
-   //double tp;
-   //double tn;
-   //double fp;
-   //double fn;
    int length;
    ModelUnit *rule;
    
@@ -100,7 +95,7 @@ class PARA_FILE
    char filename_prefix[Max_File][FILENAME_LENGTH];
    int no_snps[Max_File];
    int no_subjects;
-   int no_cases;
+   //int no_cases;
    int Np; //number of models left for each iteration
    float penalty_per_snp;
    
@@ -172,7 +167,7 @@ class LAYER_DATA //a layer of the pyramid, ontaining multiple genotype files
    void GABA(int);
    void Calculate_Number_Case_Controls();
    void ClassLabel_Counts();
-   void Fitness_U_statistics();
+   void Fitness_U_statistics(bool);
    void Fitness_ANOVA();
    void Fitness_Cox_likelihood();
    double Scoring(int, int);

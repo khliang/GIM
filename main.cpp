@@ -17,12 +17,12 @@ int main(int argc, char *argv[])
     FILE *header_fp;    
     int parameter_index;
     
-    char *ver = "1.4.3";
+    char *ver = "1.4.5";
 
 
     int no_para;
     
-    printf("Generalized Iterative Modelling %s\n", ver);
+    printf("Generalized Iterative Modelling %s\n\n", ver);
     top_layer.run_cox = 0;
      
     if (argc == 2) 
@@ -35,9 +35,30 @@ int main(int argc, char *argv[])
     	Para.Load(argv[2]);
     	top_layer.run_cox = 1;
 	} else
-		Abort ("Command: GIM [parameter_filename] or GIM -cox [parameter_filename].");
-		
-    
+	{
+		printf("Usage: \n");
+		printf("GIM [parameter_filename] (when the data does not have the time-to-event information.)\n");		
+		printf("or\n");
+		printf("GIM -cox [parameter_filename] (when the data contains a column of the time-to-event information.)\n\n");
+						
+		printf("Definition of items in the parameter file:\n");
+		printf("- number of data files (a people-by-biomarker matrix)\n");
+		printf("- Filename (without the extension .txt)\n");
+		printf("- number of biomarker variables\n");
+		printf("- number of people\n");
+		printf("- iteration number\n");
+		printf("- penalty of the fitness score for adding one additional variable to the model\n\n");
+
+		printf("An Example parameter file is as follows:\n");
+		printf("1\n");
+		printf("GIM\n");
+		printf("34\n");
+		printf("253\n");
+		printf("500\n");
+		printf("0.5\n\n");
+		Abort ("Program stopped.");
+	}
+
     printf("Setting parameters for the top layer.\n");
     top_layer.GetPara(Para.no_file, Para.no_subjects, Para.Np, Para.penalty_per_snp);
           
